@@ -9,17 +9,17 @@ Gem::Specification.new do |s|
   s.date = Time.now.strftime('%Y-%m-%d')
   s.authors = ['Jonathan W. Zaleski']
   s.email = ['JonathanZaleski@gmail.com']
-  s.summary = <<-EOL
-A simple plugin used to control the maximum number of jobs for a Sidekiq worker
-to process
-EOL
-  s.description = <<-EOL
-This gem provides the ability to configure the maximum number of jobs a Sidekiq
-worker will process before terminating. For an environment running Kubernetes
-this is a perfect addition because once the affected pod dies it will
-automatically be restarted [gracefully] resetting memory, database-connections,
-etc. with minimal interruption to throughput
-EOL
+  s.summary = <<~SUMMARY
+    A simple plugin used to control the maximum number of jobs for a Sidekiq
+    worker to process before terminating
+  SUMMARY
+  s.description = <<~DESCRIPTION
+    This gem provides the ability to configure the maximum number of jobs a
+    Sidekiq worker will process before terminating. For an environment running
+    Kubernetes this is a perfect addition because once the affected pod dies it
+    will automatically be restarted [gracefully] resetting memory,
+    database-connections, etc. with minimal interruption to throughput
+  DESCRIPTION
   s.homepage = 'http://github.com/jzaleski/sidekiq-max-jobs'
   s.license = 'MIT'
 

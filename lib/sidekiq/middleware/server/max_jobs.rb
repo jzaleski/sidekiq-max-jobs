@@ -21,15 +21,15 @@ module Sidekiq
           end
 
           def increment_counter!
-            @counter += 1
+            @counter = counter.next
           end
 
-          def logger
-            @logger ||= ::Sidekiq.logger
+          def log_info(message)
+            ::Sidekiq.logger.info(message) if defined?(::Sidekiq.logger)
           end
 
           def log_initialization!
-            logger.info("Max-Jobs middleware enabled, shutting down pid: #{pid} after: #{max_jobs_with_jitter} job(s)")
+            log_info("Max-Jobs middleware enabled, shutting down pid: #{pid} after: #{max_jobs_with_jitter} job(s)")
           end
 
           def max_jobs
@@ -73,7 +73,7 @@ module Sidekiq
                 self.class.increment_counter!
 
                 if self.class.counter == self.class.max_jobs_with_jitter
-                  self.class.logger.info "Max-Jobs quota met, shutting down pid: #{self.class.pid}"
+                  self.class.log_info("Max-Jobs quota met, shutting down pid: #{self.class.pid}")
                   ::Process.kill('TERM', self.class.pid)
                 end
               end
