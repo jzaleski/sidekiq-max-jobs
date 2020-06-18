@@ -12,15 +12,15 @@ AllCops:
 Layout/DotPosition:
   Enabled: false
 
+Layout/LineLength:
+  Max: 120
+
 Layout/SpaceInLambdaLiteral:
   EnforcedStyle: require_space
 
 Metrics/BlockLength:
   Exclude:
     - 'spec/**/*'
-
-Metrics/LineLength:
-  Max: 120
 
 Style/Documentation:
   Enabled: false
