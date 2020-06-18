@@ -70,8 +70,8 @@ module Sidekiq
                 ENV[key] ||
                 ENV['MAX_JOBS_JITTER'] ||
                 1
-              )
-            ).to_i
+              ).to_i
+            )
           end
 
           def max_jobs_jitter_key(queue)
