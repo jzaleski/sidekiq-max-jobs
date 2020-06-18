@@ -16,12 +16,26 @@ module Sidekiq
         ).strip
 
         class << self
-          def counter
-            @counter ||= 0
+          def cache
+            @cache ||= {}
           end
 
-          def increment_counter!
-            @counter = counter.next
+          def counter(queue)
+            key = counter_key(queue)
+            return cache[key] if cache.include?(key)
+
+            cache[key] = 0
+          end
+
+          def counter_key(queue)
+            "COUNTER_#{queue.upcase}"
+          end
+
+          def increment_counter!(queue)
+            key = counter_key(queue)
+            counter = cache[key] || 0
+
+            cache[key] = counter.next
           end
 
           def log_info(message)
@@ -29,23 +43,61 @@ module Sidekiq
           end
 
           def log_initialization!
-            log_info("Max-Jobs middleware enabled, shutting down pid: #{pid} after: #{max_jobs_with_jitter} job(s)")
+            log_info("Max-Jobs middleware enabled, shutting down pid: #{pid} after max-jobs threshold reached")
           end
 
-          def max_jobs
-            @max_jobs ||= (ENV['MAX_JOBS'] || 100).to_i
+          def max_jobs(queue)
+            key = max_jobs_key(queue)
+            return cache[key] if cache.include?(key)
+
+            cache[key] = (
+              ENV[key] ||
+              ENV['MAX_JOBS'] ||
+              100
+            ).to_i
           end
 
-          def max_jobs_jitter
-            @max_jobs_jitter ||= rand((ENV['MAX_JOBS_JITTER'] || 1).to_i)
+          def max_jobs_key(queue)
+            "MAX_JOBS_#{queue.upcase}"
           end
 
-          def max_jobs_with_jitter
-            @max_jobs_with_jitter ||= max_jobs + max_jobs_jitter
+          def max_jobs_jitter(queue)
+            key = max_jobs_jitter_key(queue)
+            return cache[key] if cache.include?(key)
+
+            cache[key] = rand(
+              (
+                ENV[key] ||
+                ENV['MAX_JOBS_JITTER'] ||
+                1
+              )
+            ).to_i
           end
 
-          def mutex
-            @mutex ||= ::Mutex.new
+          def max_jobs_jitter_key(queue)
+            "MAX_JOBS_JITTER_#{queue.upcase}"
+          end
+
+          def max_jobs_with_jitter(queue)
+            key = max_jobs_with_jitter_key(queue)
+            return cache[key] if cache.include?(key)
+
+            cache[key] = max_jobs(queue) + max_jobs_jitter(queue)
+          end
+
+          def max_jobs_with_jitter_key(queue)
+            "MAX_JOBS_WITH_JITTER_#{queue.upcase}"
+          end
+
+          def mutex(queue)
+            key = mutex_key(queue)
+            return cache[key] if cache.include?(key)
+
+            cache[key] = ::Mutex.new
+          end
+
+          def mutex_key(queue)
+            "MUTEX_#{queue.upcase}"
           end
 
           def pid
@@ -54,9 +106,9 @@ module Sidekiq
         end
 
         def call(
-          _,  # worker-instance
-          _,  # item
-          _   # queue
+          _,     # worker-instance
+          _,     # item
+          queue
         )
           exception_raised = false
           begin
@@ -69,10 +121,10 @@ module Sidekiq
             raise
           ensure
             if !exception_raised
-              self.class.mutex.synchronize do
-                self.class.increment_counter!
+              self.class.mutex(queue).synchronize do
+                self.class.increment_counter!(queue)
 
-                if self.class.counter == self.class.max_jobs_with_jitter
+                if self.class.counter(queue) == self.class.max_jobs_with_jitter(queue)
                   self.class.log_info("Max-Jobs quota met, shutting down pid: #{self.class.pid}")
                   ::Process.kill('TERM', self.class.pid)
                 end

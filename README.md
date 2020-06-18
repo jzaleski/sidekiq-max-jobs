@@ -66,7 +66,14 @@ behavior (currently only configurable via the environment):
 * `MAX_JOBS_JITTER`: Used as the upper-bound for calculating a random number
 between 1 and the value specified. This value is added to the `MAX_JOBS` value,
 mentioned above, to decrease the likelihood that all of your `Worker(s)`
-restart at / around the same time (default: `1`)
+restart at / around the same time (default: `rand(1)`)
+* `MAX_JOBS_<QUEUE>`: The number of jobs to process for a specific queue before
+terminating (default: `(ENV['MAX_JOBS'] || 100).to_i`)
+* `MAX_JOBS_JITTER_<QUEUE>`: Used as the upper-bound for calculating a random
+number between 1 and the value specified. This value is added to the
+`MAX_JOBS_<QUEUE>` value, mentioned above, to decreased the likelihood that all
+of your `Worker(s)` restart at / around the same time (default:
+`rand((ENV['MAX_JOBS_JITTER'] || 1).to_i)`)
 
 Contributing
 ------------
