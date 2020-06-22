@@ -4,6 +4,8 @@ module Sidekiq
   module Middleware
     module Server
       class MaxJobs
+        # Version
+
         VERSION = File.read(
           File.join(
             File.dirname(__FILE__),
@@ -16,143 +18,185 @@ module Sidekiq
         ).strip
 
         class << self
+          # Constant(s)
+
+          COUNTER_FOR_QUEUE_KEY_TEMPLATE = 'COUNTER_%s'
+          COUNTER_KEY = 'COUNTER'
+          LOG_INITIALIZATION_TEMPLATE = \
+            'Max-Jobs middleware enabled, shutting down pid: %d when quota is reached'
+          LOG_MAX_JOBS_QUOTA_MET_FOR_QUEUE_TEMPLATE = \
+            'Max-Jobs queue quota met for: "%s", shutting down pid: %d'
+          LOG_MAX_JOBS_QUOTA_MET_TEMPLATE = \
+            'Max-Jobs total quota met, shutting down pid: %d'
+          LOG_MAX_JOBS_RUNTIME_QUOTA_MET_TEMPLATE = \
+            'Max-Jobs runtime quota met, shutting down pid: %d'
+          MAX_JOBS_FOR_QUEUE_KEY_TEMPLATE = 'MAX_JOBS_%s'
+          MAX_JOBS_JITTER_FOR_QUEUE_KEY_TEMPLATE = 'MAX_JOBS_JITTER_%s'
+          MAX_JOBS_JITTER_KEY = 'MAX_JOBS_JITTER'
+          MAX_JOBS_KEY = 'MAX_JOBS'
+          MAX_JOBS_RUNTIME_JITTER_KEY = 'MAX_JOBS_RUNTIME_JITTER'
+          MAX_JOBS_RUNTIME_WITH_JITTER_KEY = 'MAX_JOBS_RUNTIME_WITH_JITTER'
+          MAX_JOBS_RUNTIME_KEY = 'MAX_JOBS_RUNTIME'
+          MAX_JOBS_WITH_JITTER_FOR_QUEUE_KEY_TEMPLATE = \
+            'MAX_JOBS_WITH_JITTER_%s'
+          MAX_JOBS_WITH_JITTER_KEY = 'MAX_JOBS_WITH_JITTER'
+          MUTEX_KEY = 'MUTEX'
+          PID_KEY = 'PID'
+          START_TIME_KEY = 'START_TIME'
+          TERM = 'TERM'
+          TERMINATING_KEY = 'TERMINATING'
+
+          # Default(s)
+
+          DEFAULT_MAX_JOBS = 500
+          DEFAULT_MAX_JOBS_FOR_QUEUE = -1
+          DEFAULT_MAX_JOBS_JITTER = -1
+          DEFAULT_MAX_JOBS_JITTER_FOR_QUEUE = -1
+          DEFAULT_MAX_JOBS_RUNTIME = -1
+          DEFAULT_MAX_JOBS_RUNTIME_JITTER = -1
+
+          # Helper Method(s)
+
           def cache
             @cache ||= {}
           end
 
           def counter
-            key = counter_key
+            key = COUNTER_KEY
             cache[key] ||= 0
           end
 
           def counter_for_queue(queue)
-            key = counter_for_queue_key(queue)
+            key = format(COUNTER_FOR_QUEUE_KEY_TEMPLATE, queue.upcase)
             cache[key] ||= 0
           end
 
-          def counter_for_queue_key(queue)
-            "COUNTER_#{queue.upcase}"
-          end
-
-          def counter_key
-            'COUNTER'
-          end
-
-          def default_max_jobs
-            100
-          end
-
-          def default_max_jobs_jitter
-            1
-          end
-
           def increment_counter!
-            key = counter_key
+            key = COUNTER_KEY
             cache[key] = (cache[key] || 0).next
           end
 
           def increment_counter_for_queue!(queue)
-            key = counter_for_queue_key(queue)
+            key = format(COUNTER_FOR_QUEUE_KEY_TEMPLATE, queue.upcase)
             cache[key] = (cache[key] || 0).next
           end
 
           def log_info(message)
-            ::Sidekiq.logger.info(message) if defined?(::Sidekiq.logger)
+            logger_defined = defined?(::Sidekiq.logger)
+            logger_defined ? ::Sidekiq.logger.info(message) : puts(message)
           end
 
           def log_initialization!
-            log_info("Max-Jobs middleware enabled, shutting down pid: #{pid} when max-jobs quota is reached")
+            message = format(LOG_INITIALIZATION_TEMPLATE, pid)
+            log_info(message)
+          end
+
+          def log_max_jobs_quota_met!
+            message = format(LOG_MAX_JOBS_QUOTA_MET_TEMPLATE, pid)
+            log_info(message)
+          end
+
+          def log_max_jobs_quota_met_for_queue!(queue)
+            message = format(
+              LOG_MAX_JOBS_QUOTA_MET_FOR_QUEUE_TEMPLATE,
+              queue,
+              pid
+            )
+            log_info(message)
+          end
+
+          def log_max_jobs_runtime_quota_met!
+            message = format(LOG_MAX_JOBS_RUNTIME_QUOTA_MET_TEMPLATE, pid)
+            log_info(message)
           end
 
           def max_jobs
-            key = max_jobs_key
-            cache[key] ||= (ENV[key] || default_max_jobs).to_i
+            key = MAX_JOBS_KEY
+            cache[key] ||= (ENV[key] || DEFAULT_MAX_JOBS).to_i
           end
 
           def max_jobs_for_queue(queue)
-            key = max_jobs_for_queue_key(queue)
-            cache[key] ||= (
-              ENV[key] ||
-              ENV[max_jobs_key] ||
-              default_max_jobs
-            ).to_i
-          end
-
-          def max_jobs_for_queue_key(queue)
-            "MAX_JOBS_#{queue.upcase}"
+            key = format(MAX_JOBS_FOR_QUEUE_KEY_TEMPLATE, queue.upcase)
+            cache[key] ||= (ENV[key] || DEFAULT_MAX_JOBS_FOR_QUEUE).to_i
           end
 
           def max_jobs_jitter
-            key = max_jobs_jitter_key
-            cache[key] ||= rand((ENV[key] || default_max_jobs_jitter).to_i)
+            key = MAX_JOBS_JITTER_KEY
+            cache[key] ||= rand((ENV[key] || DEFAULT_MAX_JOBS_JITTER).to_i)
           end
 
           def max_jobs_jitter_for_queue(queue)
-            key = max_jobs_jitter_for_queue_key(queue)
-            cache[key] ||= rand(
-              (
-                ENV[key] ||
-                ENV[max_jobs_jitter_key] ||
-                default_max_jobs_jitter
-              ).to_i
-            )
+            key = format(MAX_JOBS_JITTER_FOR_QUEUE_KEY_TEMPLATE, queue.upcase)
+            cache[key] ||= \
+              rand((ENV[key] || DEFAULT_MAX_JOBS_JITTER_FOR_QUEUE).to_i)
           end
 
-          def max_jobs_jitter_for_queue_key(queue)
-            "MAX_JOBS_JITTER_#{queue.upcase}"
+          def max_jobs_quota_met?
+            quota = max_jobs_with_jitter
+            quota.positive? ? counter == quota : false
           end
 
-          def max_jobs_jitter_key
-            'MAX_JOBS_JITTER'
+          def max_jobs_quota_met_for_queue?(queue)
+            quota = max_jobs_with_jitter_for_queue(queue)
+            quota.positive? ? counter_for_queue(queue) == quota : false
           end
 
-          def max_jobs_key
-            'MAX_JOBS'
+          def max_jobs_runtime
+            key = MAX_JOBS_RUNTIME_KEY
+            cache[key] ||= (ENV[key] || DEFAULT_MAX_JOBS_RUNTIME).to_i
+          end
+
+          def max_jobs_runtime_jitter
+            key = MAX_JOBS_RUNTIME_JITTER_KEY
+            cache[key] ||= \
+              rand((ENV[key] || DEFAULT_MAX_JOBS_RUNTIME_JITTER).to_i)
+          end
+
+          def max_jobs_runtime_quota_met?
+            quota = max_jobs_runtime_with_jitter
+            quota.positive? ? (::Time.now.to_i - start_time) >= quota : false
+          end
+
+          def max_jobs_runtime_with_jitter
+            key = MAX_JOBS_RUNTIME_WITH_JITTER_KEY
+            cache[key] ||= (max_jobs_runtime + max_jobs_runtime_jitter)
           end
 
           def max_jobs_with_jitter
-            key = max_jobs_with_jitter_key
+            key = MAX_JOBS_WITH_JITTER_KEY
             cache[key] ||= (max_jobs + max_jobs_jitter)
           end
 
           def max_jobs_with_jitter_for_queue(queue)
-            key = max_jobs_with_jitter_for_queue_key(queue)
+            key = \
+              format(MAX_JOBS_WITH_JITTER_FOR_QUEUE_KEY_TEMPLATE, queue.upcase)
             cache[key] ||= \
               (max_jobs_for_queue(queue) + max_jobs_jitter_for_queue(queue))
           end
 
-          def max_jobs_with_jitter_for_queue_key(queue)
-            "MAX_JOBS_WITH_JITTER_#{queue.upcase}"
-          end
-
-          def max_jobs_with_jitter_key
-            'MAX_JOBS_WITH_JITTER'
-          end
-
           def mutex
-            key = mutex_key
+            key = MUTEX_KEY
             cache[key] ||= ::Mutex.new
           end
 
-          def mutex_key
-            'MUTEX'
-          end
-
           def pid
-            key = pid_key
+            key = PID_KEY
             cache[key] ||= ::Process.pid
           end
 
-          def pid_key
-            'PID'
+          def start_time
+            key = START_TIME_KEY
+            cache[key] ||= ::Time.now.to_i
           end
 
-          def quota_met?
-            counter == max_jobs_with_jitter
+          def terminate!
+            key = TERMINATING_KEY
+            cache[key] = true && ::Process.kill(TERM, pid)
           end
 
-          def quota_met_for_queue?(queue)
-            counter_for_queue(queue) == max_jobs_with_jitter_for_queue(queue)
+          def terminating?
+            key = TERMINATING_KEY
+            cache[key] == true
           end
         end
 
@@ -165,36 +209,44 @@ module Sidekiq
           begin
             yield
           rescue Exception
-            # Set the `exception_raised` boolean to `true` so that the
-            # job-counter *is not* incremented in the `ensure` block
+            # Set the `exception_raised` boolean to `true` so that the counter
+            # *is not* incremented in the `ensure` block
             exception_raised = true
             # Re-raise the `Exception` so that _Sidekiq_ can deal w/ it
             raise
           ensure
-            if !exception_raised
+            if !exception_raised && !self.class.terminating?
               self.class.mutex.synchronize do
+                # Controls whether or not the process will be TERMinated at the
+                # end of the block
                 terminate = false
+
+                # First check if the runtime quota has been met
+                if self.class.max_jobs_runtime_quota_met?
+                  self.class.log_max_jobs_runtime_quota_met!
+                  terminate = true
+                end
 
                 # Increment the total counter
                 self.class.increment_counter!
 
-                # First check if the total quota has been met
-                if self.class.quota_met?
-                  self.class.log_info("Max-Jobs quota met, shutting down pid: #{self.class.pid}")
+                # Next, check if the total quota has been met
+                if !terminate && self.class.max_jobs_quota_met?
+                  self.class.log_max_jobs_quota_met!
                   terminate = true
                 end
 
                 # Increment the queue specific counter
                 self.class.increment_counter_for_queue!(queue)
 
-                # Now check if the queue specific quota has been met
-                if !terminate && self.class.quota_met_for_queue?(queue)
-                  self.class.log_info(%(Max-Jobs quota met for queue: "#{queue}", shutting down pid: #{self.class.pid}))
+                # Last[ly], check if the queue quota has been met
+                if !terminate && self.class.max_jobs_quota_met_for_queue?(queue)
+                  self.class.log_max_jobs_quota_met_for_queue!(queue)
                   terminate = true
                 end
 
-                # If applicable, TERMinate the `Process`
-                ::Process.kill('TERM', self.class.pid) if terminate
+                # If applicable, terminate
+                self.class.terminate! if terminate
               end
             end
           end
