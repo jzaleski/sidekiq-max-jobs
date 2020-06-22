@@ -52,7 +52,7 @@ end
 If everything above is successful the next time you start your worker you will
 see a message like the following:
 ```bash
-2020-06-10T00:23:31.789Z pid=73703 tid=oxifk6l13 INFO: Max-Jobs middleware enabled, shutting down pid: 73703 when max-jobs quota is reached
+2020-06-10T00:23:31.789Z pid=73703 tid=oxifk6l13 INFO: Max-Jobs middleware enabled, shutting down pid: 73703 when quota is reached
 ```
 
 Configuration Options
@@ -62,30 +62,36 @@ Above we covered how to get started, but that's only the beginning. There are a
 few configuration options available to you to customize the middleware's
 behavior (currently only configurable via the environment):
 
-* `MAX_JOBS`: The number of jobs to process before terminating (default: `100`)
+* `MAX_JOBS`: The number of jobs to process before terminating (default: `500`)
 * `MAX_JOBS_JITTER`: Used as the upper-bound for calculating a random number
 between 1 and the value specified. This value is added to the `MAX_JOBS` value,
 mentioned above, to decrease the likelihood that all of your `Worker(s)`
-restart at / around the same time (default: `rand(1)`)
+restart at / around the same time (default: `rand(-1)`)
 * `MAX_JOBS_<QUEUE>`: The number of jobs to process for a specific queue before
-terminating (default: `(ENV['MAX_JOBS'] || 100).to_i`)
+terminating (default: `-1`)
 * `MAX_JOBS_JITTER_<QUEUE>`: Used as the upper-bound for calculating a random
 number between 1 and the value specified. This value is added to the
 `MAX_JOBS_<QUEUE>` value, mentioned above, to decreased the likelihood that all
 of your `Worker(s)` restart at / around the same time (default:
-`rand((ENV['MAX_JOBS_JITTER'] || 1).to_i)`)
+`rand(-1)`)
+* `MAX_JOBS_RUNTIME`: The total time in seconds to run before terminating
+(default: `-1`)
+* `MAX_JOBS_RUNTIME_JITTER`: Used as the upper-bound for calculating a random
+number between 1 and the value specified. This value is added to the
+`MAX_JOBS_RUNTIME` value, mentioned above, to decrease the likelihood that all
+of your `Worker(s)` restart at / around the same time (default: `rand(-1)`)
 
 Important Note
 --------------
 
-When determining if the max-job quota has been reached the total jobs processed
-is checked first, followed by the jobs processed for the current queue. If your
-`Worker(s)` are handling multiple queues it is generally recommended that you
-set the total value to the same value as your highest queue value (e.g. if you
-had `MAX_JOBS_FOO=100` and `MAX_JOBS_BAR=200` it probably makes sense to set
-`MAX_JOBS=200`, if not a little bit lower). Setting the right limits ultimately
-depends on the intensity / resource needs of the work being performed. The same
-rule of thumb applies to `MAX_JOBS_JITTER` as well.
+When determining if the max-job quota has been reached the runtime is checked
+first, followed by the total jobs processed, followed by the jobs processed for
+the current queue. If your `Worker(s)` are handling multiple queues it is
+recommended that you set the total value to the same value as your highest queue
+value (e.g. if you had `MAX_JOBS_FOO=100` and `MAX_JOBS_BAR=200` it probably
+makes sense to set `MAX_JOBS=200`, if not a little bit lower). Setting the right
+limits ultimately depends on the intensity / resource needs of the work being
+performed. The same rule of thumb applies to `MAX_JOBS_JITTER` as well.
 
 Contributing
 ------------
