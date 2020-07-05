@@ -10,8 +10,8 @@ Gem::Specification.new do |s|
   s.authors = ['Jonathan W. Zaleski']
   s.email = ['JonathanZaleski@gmail.com']
   s.summary = <<~SUMMARY
-    A simple plugin used to control the maximum number of jobs for a Sidekiq
-    worker to process before terminating
+    A simple plugin used to control the maximum number of jobs, or maximum
+    runtime, for a Sidekiq worker before terminating.
   SUMMARY
   s.description = <<~DESCRIPTION
     This gem provides the ability to configure the maximum number of jobs a
